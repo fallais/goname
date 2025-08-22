@@ -4,7 +4,7 @@ GoName is a tool that helps you renaming your video files.
 
 ## Screenshots
 
-[Plan action](./assets/screenshot_1.png)
+![Plan action](./assets/screenshot_1.png)
 
 ## Features
 
