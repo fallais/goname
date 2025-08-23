@@ -1,42 +1,37 @@
-package plan
+package apply
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"goname/internal/models"
-	"goname/pkg/database"
-	"goname/pkg/database/tmdb"
+	"goname/pkg/log"
 	"goname/pkg/services"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
-const AddCarriageReturn = false
-
 func Run(cmd *cobra.Command, args []string) {
-	if viper.GetString("tmdb.api_key") == "" {
-		log.Fatal("TMDB API key is required. Set it via --api-key flag or TMDB_API_KEY environment variable")
-	}
+	log.Debug("goname is starting", zap.String("command", "apply"))
 
 	// Initialize services
-	tmdbService, err := tmdb.New(viper.GetString("tmdb.api_key"))
+	tmdbService, err := services.NewTMDBService(viper.GetString("tmdb.api_key"))
 	if err != nil {
-		log.Fatalf("failed to initialize TMDB service: %v", err)
+		log.Fatal("failed to initialize TMDB service", zap.Error(err))
 	}
 
 	fileService := services.NewFileService()
 
 	// Scan for video files
-	fmt.Printf("Scanning directory: %s\n", viper.GetString("dir"))
-	videoFiles, err := fileService.ScanDirectory(viper.GetString("dir"), viper.GetBool("recursive"))
+	fmt.Printf("Scanning directory: %s\n", viper.GetString("apply.input_dir"))
+	videoFiles, err := fileService.ScanDirectory(viper.GetString("apply.input_dir"), viper.GetBool("apply.recursive"))
 	if err != nil {
-		log.Fatalf("failed to scan directory: %v", err)
+		log.Fatal("failed to scan directory", zap.Error(err))
 	}
 
 	if len(videoFiles) == 0 {
@@ -49,68 +44,84 @@ func Run(cmd *cobra.Command, args []string) {
 	// Color setup
 	green := color.New(color.FgGreen, color.Bold)
 	red := color.New(color.FgRed, color.Bold)
+	cyan := color.New(color.FgCyan)
 	yellow := color.New(color.FgYellow)
 
 	// Process each video file
 	var results []models.RenameResult
-	alreadyCorrectCount := 0
-	needsRenameCount := 0
-	errorCount := 0
+	for i, videoFile := range videoFiles {
+		fmt.Printf("Processing [%d/%d]: %s\n", i+1, len(videoFiles), cyan.Sprint(videoFile.OriginalName))
 
-	for _, videoFile := range videoFiles {
-		result := processVideoFileForPlan(videoFile, tmdbService, fileService, viper.GetString("type"))
+		result := processVideoFileForApply(videoFile, tmdbService, fileService, viper.GetString("media.type"))
 		results = append(results, result)
 
 		if result.Success {
-			// Check if the current filename already matches the proposed new filename
-			currentBaseName := strings.TrimSuffix(videoFile.OriginalName, filepath.Ext(videoFile.OriginalName))
-			proposedBaseName := strings.TrimSuffix(result.NewFileName, filepath.Ext(result.NewFileName))
-
-			if currentBaseName == proposedBaseName {
-				// File is already correctly named
-				alreadyCorrectCount++
-				fmt.Print("  ")
-				green.Printf("%s\n", videoFile.OriginalName)
-			} else {
-				// File needs to be renamed
-				needsRenameCount++
-				fmt.Print("  ")
-				fmt.Printf("%s → %s\n", videoFile.OriginalName, yellow.Sprint(result.NewFileName))
-			}
-		} else {
-			errorCount++
 			fmt.Print("  ")
-			fmt.Printf("%s: %v\n", videoFile.OriginalName, red.Sprint(result.Error))
+			green.Print("✓ ")
+			fmt.Printf("Would rename to: %s\n", green.Sprint(result.NewFileName))
+		} else {
+			fmt.Print("  ")
+			red.Print("✗ ")
+			fmt.Printf("Error: %v\n", red.Sprint(result.Error))
 		}
-
-		if AddCarriageReturn {
-			fmt.Println()
-		}
+		fmt.Println()
 	}
 
 	// Summary
-	fmt.Println()
+	successCount := 0
+	for _, result := range results {
+		if result.Success {
+			successCount++
+		}
+	}
+
 	fmt.Println(color.HiBlackString("─────────────────────────────────────────────────────────────"))
-	fmt.Printf("Plan Summary: ")
-	green.Printf("%d already correct", alreadyCorrectCount)
+	fmt.Printf("Summary: ")
+	green.Printf("%d successful", successCount)
 	fmt.Print(", ")
-	yellow.Printf("%d to rename", needsRenameCount)
-	fmt.Print(", ")
-	if errorCount > 0 {
-		red.Printf("%d errors", errorCount)
+	if len(results)-successCount > 0 {
+		red.Printf("%d failed", len(results)-successCount)
 	} else {
-		fmt.Print("0 errors")
+		fmt.Print("0 failed")
 	}
 	fmt.Printf(", %d total\n", len(results))
 
-	if needsRenameCount > 0 {
-		fmt.Println()
-		yellow.Println("To apply these changes, run: goname apply")
+	// Perform actual renames if not dry-run
+	if !viper.GetBool("apply.dry_run") && successCount > 0 {
+		if viper.GetBool("apply.interactive") {
+			fmt.Print("\n")
+			yellow.Print("Proceed with renaming? (y/N): ")
+			var response string
+			fmt.Scanln(&response)
+			if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
+				fmt.Println("Operation cancelled.")
+				return
+			}
+		}
+
+		fmt.Println("\nApplying renames...")
+		for _, result := range results {
+			if result.Success {
+				oldPath := result.VideoFile.Path
+				dir := filepath.Dir(oldPath)
+				newPath := filepath.Join(dir, result.NewFileName)
+
+				if err := fileService.RenameFile(oldPath, newPath); err != nil {
+					fmt.Print("  ")
+					red.Print("✗ ")
+					fmt.Printf("Failed to rename %s: %v\n", result.VideoFile.OriginalName, err)
+				} else {
+					fmt.Print("  ")
+					green.Print("✓ ")
+					fmt.Printf("Renamed: %s\n", result.NewFileName)
+				}
+			}
+		}
 	}
 }
 
-// processVideoFileForPlan processes a single video file and returns a rename result
-func processVideoFileForPlan(videoFile models.VideoFile, tmdbService database.VideoDatabase, fileService *services.FileService, mediaTypeOverride string) models.RenameResult {
+// processVideoFileForApply processes a single video file and returns a rename result
+func processVideoFileForApply(videoFile models.VideoFile, tmdbService *services.TMDBService, fileService *services.FileService, mediaTypeOverride string) models.RenameResult {
 	result := models.RenameResult{
 		VideoFile: videoFile,
 		Success:   false,
@@ -145,7 +156,7 @@ func processVideoFileForPlan(videoFile models.VideoFile, tmdbService database.Vi
 
 	case models.MediaTypeTVShow:
 		// For TV shows, we need to extract season and episode numbers
-		season, episode := extractSeasonEpisode(videoFile.OriginalName)
+		season, episode := extractSeasonEpisodeForApply(videoFile.OriginalName)
 		if season == 0 || episode == 0 {
 			result.Error = fmt.Errorf("could not extract season/episode information")
 			return result
@@ -157,13 +168,13 @@ func processVideoFileForPlan(videoFile models.VideoFile, tmdbService database.Vi
 			return result
 		}
 
-		episodeID, err := strconv.Atoi(show.Database.IMDBId)
+		showId, err := strconv.Atoi(show.Database.IMDBId)
 		if err != nil {
-			result.Error = fmt.Errorf("invalid episode ID: %w", err)
+			result.Error = fmt.Errorf("invalid show ID: %w", err)
 			return result
 		}
 
-		episodeInfo, err := tmdbService.GetEpisode(episodeID, season, episode)
+		episodeInfo, err := tmdbService.GetEpisode(showId, season, episode)
 		if err != nil {
 			result.Error = err
 			return result
@@ -180,8 +191,8 @@ func processVideoFileForPlan(videoFile models.VideoFile, tmdbService database.Vi
 	return result
 }
 
-// extractSeasonEpisode extracts season and episode numbers from filename
-func extractSeasonEpisode(filename string) (season, episode int) {
+// extractSeasonEpisodeForApply extracts season and episode numbers from filename
+func extractSeasonEpisodeForApply(filename string) (season, episode int) {
 	filename = strings.ToLower(filename)
 
 	// Simple pattern matching for S##E## format

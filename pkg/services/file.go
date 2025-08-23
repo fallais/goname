@@ -4,37 +4,78 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"goname/internal/models"
 )
 
+var SupportedExtensions = []string{
+	".mp4",
+	".mkv",
+	".avi",
+	".mov",
+	".wmv",
+	".flv",
+	".webm",
+	".m4v",
+	".mpg",
+	".mpeg",
+	".3gp",
+	".ogv",
+}
+
 // FileService handles file operations and scanning
 type FileService struct {
-	supportedExtensions map[string]bool
+	supportedExtensions []string
+	tvShowTemplate      string
+	movieTemplate       string
 }
 
 // NewFileService creates a new file service instance
 func NewFileService() *FileService {
-	// Common video file extensions
-	extensions := map[string]bool{
-		".mp4":  true,
-		".mkv":  true,
-		".avi":  true,
-		".mov":  true,
-		".wmv":  true,
-		".flv":  true,
-		".webm": true,
-		".m4v":  true,
-		".mpg":  true,
-		".mpeg": true,
-		".3gp":  true,
-		".ogv":  true,
-	}
-
 	return &FileService{
-		supportedExtensions: extensions,
+		supportedExtensions: SupportedExtensions,
+		tvShowTemplate:      TVShowTemplateDefault,
+		movieTemplate:       MovieTemplateDefault,
 	}
+}
+
+// NewFileServiceWithTemplates creates a new file service instance with custom templates
+func NewFileServiceWithTemplates(tvTemplate, movieTemplate string) *FileService {
+	return &FileService{
+		supportedExtensions: SupportedExtensions,
+		tvShowTemplate:      tvTemplate,
+		movieTemplate:       movieTemplate,
+	}
+}
+
+// SetTVShowTemplate sets the template for TV show filename generation
+func (fs *FileService) SetTVShowTemplate(template string) error {
+	if err := fs.ValidateTemplate(template); err != nil {
+		return err
+	}
+	fs.tvShowTemplate = template
+	return nil
+}
+
+// SetMovieTemplate sets the template for movie filename generation
+func (fs *FileService) SetMovieTemplate(template string) error {
+	if err := fs.ValidateTemplate(template); err != nil {
+		return err
+	}
+	fs.movieTemplate = template
+	return nil
+}
+
+// GetTVShowTemplate returns the current TV show template
+func (fs *FileService) GetTVShowTemplate() string {
+	return fs.tvShowTemplate
+}
+
+// GetMovieTemplate returns the current movie template
+func (fs *FileService) GetMovieTemplate() string {
+	return fs.movieTemplate
 }
 
 // ScanDirectory scans a directory for video files
@@ -57,7 +98,7 @@ func (fs *FileService) ScanDirectory(dirPath string, recursive bool) ([]models.V
 
 		// Check if file has a supported video extension
 		ext := strings.ToLower(filepath.Ext(path))
-		if !fs.supportedExtensions[ext] {
+		if !slices.Contains(fs.supportedExtensions, ext) {
 			return nil
 		}
 
@@ -109,38 +150,6 @@ func (fs *FileService) RenameFile(oldPath, newPath string) error {
 	}
 
 	return os.Rename(oldPath, newPath)
-}
-
-// GenerateMovieFileName generates a standardized filename for a movie
-func (fs *FileService) GenerateMovieFileName(movie *models.Movie, originalPath string) string {
-	ext := filepath.Ext(originalPath)
-
-	// Format: "Movie Title (Year).ext"
-	var filename string
-	if movie.ReleaseDate.Year() > 0 {
-		filename = sanitizeFilename(movie.Title) + " (" + string(rune(movie.ReleaseDate.Year())) + ")" + ext
-	} else {
-		filename = sanitizeFilename(movie.Title) + ext
-	}
-
-	return filename
-}
-
-// GenerateTVShowFileName generates a standardized filename for a TV show episode
-func (fs *FileService) GenerateTVShowFileName(show *models.TVShow, episode *models.Episode, originalPath string) string {
-	ext := filepath.Ext(originalPath)
-
-	// Format: "Show Name - S01E01 - Episode Name.ext"
-	filename := sanitizeFilename(show.Name) +
-		" - S" + padNumber(episode.Season, 2) +
-		"E" + padNumber(episode.Episode, 2)
-
-	if episode.Title != "" {
-		filename += " - " + sanitizeFilename(episode.Title)
-	}
-
-	filename += ext
-	return filename
 }
 
 // sanitizeFilename removes or replaces characters that are not allowed in filenames

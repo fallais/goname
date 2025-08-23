@@ -32,15 +32,18 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
-
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.goname.yaml)")
+	rootCmd.PersistentFlags().StringVarP(&applyInputDir, "dir", "d", ".", "Directory to scan for video files")
+	rootCmd.PersistentFlags().BoolVarP(&applyRecursive, "recursive", "r", false, "Scan directories recursively")
+	rootCmd.PersistentFlags().StringVar(&applyTmdbAPIKey, "tmdb_api_key", "", "TMDB API key (can also be set via TMDB_API_KEY env var)")
+	rootCmd.PersistentFlags().StringVarP(&planMediaType, "type", "t", "auto", "Media type: movie, tv, or auto")
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	// Bind flags to viper
+	viper.BindPFlag("tmdb.api_key", rootCmd.Flags().Lookup("tmdb_api_key"))
+	viper.BindPFlag("media.type", rootCmd.Flags().Lookup("type"))
+
+	// Env
+	viper.BindEnv("tmdb.api_key", "TMDB_API_KEY")
 }
 
 // initConfig reads in config file and ENV variables if set.

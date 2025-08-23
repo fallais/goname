@@ -4,7 +4,6 @@ import (
 	"goname/internal/cmd/plan"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -37,16 +36,4 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(planCmd)
-
-	planCmd.Flags().StringVarP(&planDir, "dir", "d", ".", "Directory to scan for video files")
-	planCmd.Flags().BoolVarP(&planRecursive, "recursive", "r", false, "Scan directories recursively")
-	planCmd.Flags().StringVar(&planAPIKey, "api-key", "", "TMDB API key (can also be set via TMDB_API_KEY env var)")
-	planCmd.Flags().StringVarP(&planMediaType, "type", "t", "auto", "Media type: movie, tv, or auto")
-
-	// Bind flags to viper
-	viper.BindPFlag("tmdb.api_key", planCmd.Flags().Lookup("api-key"))
-	viper.BindEnv("tmdb.api_key", "TMDB_API_KEY")
-	viper.BindPFlag("media.type", planCmd.Flags().Lookup("type"))
-	viper.BindPFlag("dir", planCmd.Flags().Lookup("dir"))
-	viper.BindPFlag("recursive", planCmd.Flags().Lookup("recursive"))
 }

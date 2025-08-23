@@ -4,12 +4,13 @@ go 1.23
 
 require (
 	github.com/cyruzin/golang-tmdb v1.6.8
+	github.com/fatih/color v1.18.0
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0
+	go.uber.org/zap v1.21.0
 )
 
 require (
-	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
