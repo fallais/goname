@@ -189,18 +189,3 @@ func (d theMovieDatabase) searchTVShowWithQuery(name string, year int) (*models.
 
 	return showInfo, nil
 }
-
-// ExtractYear tries to extract a year from a filename
-/* func ExtractYear(filename string) int {
-	// Look for 4-digit years (1900-2099)
-	for _, word := range strings.Fields(filename) {
-		if len(word) == 4 {
-			if year, err := strconv.Atoi(word); err == nil {
-				if year >= 1900 && year <= 2099 {
-					return year
-				}
-			}
-		}
-	}
-	return 0
-} */

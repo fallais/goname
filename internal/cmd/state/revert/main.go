@@ -127,7 +127,8 @@ func Run(cmd *cobra.Command, args []string) {
 		}
 
 		// Perform the revert
-		if err := fileService.RenameFile(entry.NewPath, originalPath); err != nil {
+		_, err := fileService.RenameFile(entry.NewPath, originalPath)
+		if err != nil {
 			red.Printf("  ✗ Failed to revert: %v\n", err)
 			continue
 		}

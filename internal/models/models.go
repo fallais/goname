@@ -57,11 +57,12 @@ type EpisodeInfo struct {
 
 // RenameResult represents the result of a rename operation
 type RenameResult struct {
-	VideoFile   VideoFile
-	Success     bool
-	Error       error
-	MediaInfo   interface{} // Can be MovieInfo, TVShowInfo, etc.
-	NewFileName string
+	VideoFile      VideoFile
+	Success        bool
+	Error          error
+	MediaInfo      interface{} // Can be MovieInfo, TVShowInfo, etc.
+	NewFileName    string
+	ConflictAction string // Action taken during conflict resolution
 }
 
 // StateEntry represents a single rename operation in the state

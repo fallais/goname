@@ -40,10 +40,15 @@ func Run(cmd *cobra.Command, args []string) {
 		log.Fatal("unsupported database type", zap.String("db", viper.GetString("db")))
 	}
 
-	fileService := services.NewFileService()
+	// Create file service with conflict resolution
+	conflictStrategy := services.ParseConflictStrategy(viper.GetString("conflict"))
+
+	conflictResolver := services.NewConflictResolver(conflictStrategy)
+	fileService := services.NewFileServiceWithConflictResolver(conflictResolver)
 
 	// Scan for video files
 	fmt.Printf("Scanning directory: %s\n", viper.GetString("dir"))
+	fmt.Printf("Conflict resolution strategy: %s\n", conflictResolver.GetStrategyName())
 	videoFiles, err := fileService.ScanDirectory(viper.GetString("dir"), viper.GetBool("recursive"))
 	if err != nil {
 		log.Fatal("failed to scan directory", zap.Error(err))
@@ -128,14 +133,24 @@ func Run(cmd *cobra.Command, args []string) {
 				dir := filepath.Dir(oldPath)
 				newPath := filepath.Join(dir, result.NewFileName)
 
-				if err := fileService.RenameFile(oldPath, newPath); err != nil {
+				conflictResult, err := fileService.RenameFile(oldPath, newPath)
+				if err != nil {
 					fmt.Print("  ")
 					red.Print("✗ ")
 					fmt.Printf("Failed to rename %s: %v\n", result.VideoFile.OriginalName, err)
+				} else if conflictResult.Skipped {
+					fmt.Print("  ")
+					yellow.Print("⚠ ")
+					fmt.Printf("Skipped (conflict): %s\n", result.VideoFile.OriginalName)
 				} else {
 					fmt.Print("  ")
 					green.Print("✓ ")
-					fmt.Printf("Renamed: %s\n", result.NewFileName)
+					finalName := filepath.Base(conflictResult.ResolvedPath)
+					fmt.Printf("Renamed: %s", finalName)
+					if conflictResult.Action != "none" {
+						fmt.Printf(" (%s)", conflictResult.Action)
+					}
+					fmt.Println()
 
 					// Add to state for potential revert
 					if stateService != nil {
@@ -165,7 +180,7 @@ func processVideoFileForApply(videoFile models.VideoFile, tmdbService database.V
 
 	// Clean the filename for searching
 	cleanName := services.CleanTitle(videoFile.OriginalName)
-	year := services.ExtractYear(videoFile.OriginalName)
+	year := database.ExtractYear(videoFile.OriginalName)
 
 	// Determine media type
 	detectedType := videoFile.MediaType

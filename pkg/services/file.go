@@ -30,6 +30,7 @@ type FileService struct {
 	supportedExtensions []string
 	tvShowTemplate      string
 	movieTemplate       string
+	conflictResolver    *ConflictResolver
 }
 
 // NewFileService creates a new file service instance
@@ -38,6 +39,7 @@ func NewFileService() *FileService {
 		supportedExtensions: SupportedExtensions,
 		tvShowTemplate:      TVShowTemplateDefault,
 		movieTemplate:       MovieTemplateDefault,
+		conflictResolver:    NewConflictResolver(AppendNumber), // Default strategy
 	}
 }
 
@@ -47,7 +49,28 @@ func NewFileServiceWithTemplates(tvTemplate, movieTemplate string) *FileService 
 		supportedExtensions: SupportedExtensions,
 		tvShowTemplate:      tvTemplate,
 		movieTemplate:       movieTemplate,
+		conflictResolver:    NewConflictResolver(AppendNumber), // Default strategy
 	}
+}
+
+// NewFileServiceWithConflictResolver creates a new file service instance with custom conflict resolver
+func NewFileServiceWithConflictResolver(conflictResolver *ConflictResolver) *FileService {
+	return &FileService{
+		supportedExtensions: SupportedExtensions,
+		tvShowTemplate:      TVShowTemplateDefault,
+		movieTemplate:       MovieTemplateDefault,
+		conflictResolver:    conflictResolver,
+	}
+}
+
+// SetConflictResolver sets the conflict resolution strategy
+func (fs *FileService) SetConflictResolver(resolver *ConflictResolver) {
+	fs.conflictResolver = resolver
+}
+
+// GetConflictResolver returns the current conflict resolver
+func (fs *FileService) GetConflictResolver() *ConflictResolver {
+	return fs.conflictResolver
 }
 
 // SetTVShowTemplate sets the template for TV show filename generation
@@ -141,8 +164,36 @@ func (fs *FileService) guessMediaType(filename string) models.MediaType {
 	return models.MediaTypeMovie
 }
 
-// RenameFile renames a file from old path to new path
-func (fs *FileService) RenameFile(oldPath, newPath string) error {
+// RenameFile renames a file from old path to new path with conflict resolution
+func (fs *FileService) RenameFile(oldPath, newPath string) (*ConflictResult, error) {
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(newPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create directory %s: %w", dir, err)
+	}
+
+	// Resolve any naming conflicts
+	conflictResult, err := fs.conflictResolver.ResolveConflict(newPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve conflict for %s: %w", newPath, err)
+	}
+
+	// If file was skipped, return the result without renaming
+	if conflictResult.Skipped {
+		return conflictResult, nil
+	}
+
+	// Perform the actual rename
+	finalPath := conflictResult.ResolvedPath
+	if err := os.Rename(oldPath, finalPath); err != nil {
+		return nil, fmt.Errorf("failed to rename %s to %s: %w", oldPath, finalPath, err)
+	}
+
+	return conflictResult, nil
+}
+
+// RenameFileSimple renames a file without conflict resolution (legacy method)
+func (fs *FileService) RenameFileSimple(oldPath, newPath string) error {
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(newPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {

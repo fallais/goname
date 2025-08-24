@@ -39,11 +39,15 @@ func init() {
 	rootCmd.PersistentFlags().String("tmdb_api_key", "", "TMDB API key")
 	rootCmd.PersistentFlags().StringP("type", "t", "auto", "Media type: movie, tv, or auto")
 	rootCmd.PersistentFlags().String("db", "tmdb", "Database: tmdb (The Movie Database) or tvdb (The TV Database)")
+	rootCmd.PersistentFlags().String("conflict", "append", "Conflict resolution strategy: skip, append, timestamp, prompt, overwrite, backup")
+	rootCmd.PersistentFlags().String("backup-dir", "", "Directory for backups when using backup conflict strategy")
 
 	// Bind flags to viper
 	viper.BindPFlag("tmdb.api_key", rootCmd.PersistentFlags().Lookup("tmdb_api_key"))
 	viper.BindPFlag("type", rootCmd.PersistentFlags().Lookup("type"))
 	viper.BindPFlag("db", rootCmd.PersistentFlags().Lookup("db"))
+	viper.BindPFlag("conflict", rootCmd.PersistentFlags().Lookup("conflict"))
+	viper.BindPFlag("backup_dir", rootCmd.PersistentFlags().Lookup("backup-dir"))
 
 	// Env
 	viper.BindEnv("tmdb.api_key", "TMDB_API_KEY")
