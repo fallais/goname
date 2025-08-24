@@ -12,49 +12,6 @@ type VideoFile struct {
 	MediaType    MediaType
 }
 
-// MediaType represents the type of media (movie, tv show, etc.)
-type MediaType string
-
-const (
-	MediaTypeMovie  MediaType = "movie"
-	MediaTypeTVShow MediaType = "tv"
-	MediaTypeAnime  MediaType = "anime"
-)
-
-// MovieInfo represents movie information from TMDB
-type MovieInfo struct {
-	ID            int    `json:"id"`
-	Title         string `json:"title"`
-	OriginalTitle string `json:"original_title"`
-	ReleaseDate   string `json:"release_date"`
-	Year          int    `json:"-"`
-	Overview      string `json:"overview"`
-	PosterPath    string `json:"poster_path"`
-	IMDBId        string `json:"imdb_id"`
-}
-
-// TVShowInfo represents TV show information
-type TVShowInfo struct {
-	ID           int    `json:"id"`
-	Name         string `json:"name"`
-	OriginalName string `json:"original_name"`
-	FirstAirDate string `json:"first_air_date"`
-	Year         int    `json:"-"`
-	Overview     string `json:"overview"`
-	PosterPath   string `json:"poster_path"`
-}
-
-// EpisodeInfo represents episode information
-type EpisodeInfo struct {
-	ID            int    `json:"id"`
-	Name          string `json:"name"`
-	Overview      string `json:"overview"`
-	SeasonNumber  int    `json:"season_number"`
-	EpisodeNumber int    `json:"episode_number"`
-	AirDate       string `json:"air_date"`
-	StillPath     string `json:"still_path"`
-}
-
 // RenameResult represents the result of a rename operation
 type RenameResult struct {
 	VideoFile      VideoFile
@@ -76,6 +33,25 @@ type StateEntry struct {
 	MediaInfo    interface{} `json:"media_info,omitempty"`
 	Reverted     bool        `json:"reverted"`
 }
+
+// OperationStatus represents the status of a planned operation
+type OperationStatus string
+
+const (
+	OperationStatusPending    OperationStatus = "pending"
+	OperationStatusReady      OperationStatus = "ready"
+	OperationStatusConflicted OperationStatus = "conflicted"
+	OperationStatusSkipped    OperationStatus = "skipped"
+	OperationStatusError      OperationStatus = "error"
+)
+
+// ConflictType represents the type of conflict
+type ConflictType string
+
+const (
+	ConflictTypeTargetExists   ConflictType = "target_exists"   // Target file already exists on disk
+	ConflictTypeMultipleSource ConflictType = "multiple_source" // Multiple source files want same target
+)
 
 // State represents the complete state file
 type State struct {

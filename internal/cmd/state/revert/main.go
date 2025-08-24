@@ -22,7 +22,7 @@ func Run(cmd *cobra.Command, args []string) {
 		log.Fatal("failed to initialize state service", zap.Error(err))
 	}
 
-	fileService := services.NewFileService()
+	fileService := services.NewFileService("", "", nil)
 
 	// Get flags
 	id, _ := cmd.Flags().GetString("id")

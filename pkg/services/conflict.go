@@ -13,12 +13,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// ConflictResolver handles file naming conflicts during rename operations
-type ConflictResolver struct {
-	strategy    ConflictStrategy
-	interactive bool
-}
-
 // ConflictStrategy defines how to handle naming conflicts
 type ConflictStrategy int
 
@@ -35,6 +29,12 @@ type ConflictResult struct {
 	ResolvedPath string
 	Action       string
 	Skipped      bool
+}
+
+// ConflictResolver handles file naming conflicts during rename operations
+type ConflictResolver struct {
+	strategy    ConflictStrategy
+	interactive bool
 }
 
 // NewConflictResolver creates a new conflict resolver with the specified strategy
@@ -210,19 +210,19 @@ func (cr *ConflictResolver) GetStrategyName() string {
 }
 
 // ParseConflictStrategy parses a string into a ConflictStrategy
-func ParseConflictStrategy(strategy string) ConflictStrategy {
+func ParseConflictStrategy(strategy string) (ConflictStrategy, error) {
 	switch strings.ToLower(strategy) {
 	case "skip":
-		return SkipConflict
-	case "append", "append_number":
-		return AppendNumber
-	case "timestamp", "append_timestamp":
-		return AppendTimestamp
-	case "prompt", "prompt_user":
-		return PromptUser
+		return SkipConflict, nil
+	case "append":
+		return AppendNumber, nil
+	case "timestamp":
+		return AppendTimestamp, nil
+	case "prompt":
+		return PromptUser, nil
 	case "overwrite":
-		return Overwrite
+		return Overwrite, nil
 	default:
-		return AppendNumber // Default fallback
+		return AppendNumber, fmt.Errorf("unknown conflict strategy: %s", strategy)
 	}
 }

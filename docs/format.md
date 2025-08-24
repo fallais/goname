@@ -15,35 +15,36 @@ The following fields are available for use in templates:
 | `{{.Name}}` | Movie title or TV show name | string | "Breaking Bad" |
 | `{{.Title}}` | Episode title (TV shows only) | string | "Pilot" |
 | `{{.Year}}` | Release year | int | 2008 |
-| `{{.Ext}}` | File extension | string | ".mkv" |
 | `{{.Season}}` | Season number (TV shows only) | int | 1 |
 | `{{.Episode}}` | Episode number (TV shows only) | int | 5 |
 | `{{.Director}}` | Director name (movies only) | string | "Vince Gilligan" |
 | `{{.Genre}}` | Genre | string | "Drama" |
 
+**Note:** File extensions are automatically preserved and should not be included in templates.
+
 ## Predefined Templates
 
 ### TV Show Templates
 
-- **Default**: `{{.Name}} - S{{.Season}}E{{.Episode}} - {{.Title}}{{.Ext}}`
-  - Output: `Breaking Bad - S01E01 - Pilot.mkv`
+- **Default**: `{{.Name}} - S{{.Season}}E{{.Episode}} - {{.Title}}`
+  - Output: `Breaking Bad - S01E01 - Pilot.mkv` (extension preserved from original)
 
-- **Simple**: `{{.Name}} S{{.Season}}E{{.Episode}}{{.Ext}}`
-  - Output: `Breaking Bad S01E01.mkv`
+- **Simple**: `{{.Name}} S{{.Season}}E{{.Episode}}`
+  - Output: `Breaking Bad S01E01.mkv` (extension preserved from original)
 
-- **With Year**: `{{.Name}} ({{.Year}}) - S{{.Season}}E{{.Episode}} - {{.Title}}{{.Ext}}`
-  - Output: `Breaking Bad (2008) - S01E01 - Pilot.mkv`
+- **With Year**: `{{.Name}} ({{.Year}}) - S{{.Season}}E{{.Episode}} - {{.Title}}`
+  - Output: `Breaking Bad (2008) - S01E01 - Pilot.mkv` (extension preserved from original)
 
 ### Movie Templates
 
-- **Default**: `{{.Name}} ({{.Year}}){{.Ext}}`
-  - Output: `The Shawshank Redemption (1994).mp4`
+- **Default**: `{{.Name}} ({{.Year}})`
+  - Output: `The Shawshank Redemption (1994).mp4` (extension preserved from original)
 
-- **Simple**: `{{.Name}}{{.Ext}}`
-  - Output: `The Shawshank Redemption.mp4`
+- **Simple**: `{{.Name}}`
+  - Output: `The Shawshank Redemption.mp4` (extension preserved from original)
 
-- **With Genre**: `{{.Name}} ({{.Year}}) - {{.Genre}}{{.Ext}}`
-  - Output: `The Shawshank Redemption (1994) - Drama.mp4`
+- **With Genre**: `{{.Name}} ({{.Year}}) - {{.Genre}}`
+  - Output: `The Shawshank Redemption (1994) - Drama.mp4` (extension preserved from original)
 
 ## Usage Examples
 
@@ -62,19 +63,19 @@ filename := fs.GenerateTVShowFileName(show, episode, "original.mkv")
 ```go
 // Create file service with custom templates
 fs := services.NewFileServiceWithTemplates(
-    "{{.Name}} {{.Season}}x{{.Episode}} {{.Title}}{{.Ext}}", // TV template
-    "{{.Name}} [{{.Year}}]{{.Ext}}"                          // Movie template
+    "{{.Name}} {{.Season}}x{{.Episode}} {{.Title}}", // TV template
+    "{{.Name}} [{{.Year}}]"                          // Movie template
 )
 
 // Or set templates on existing service
-fs.SetTVShowTemplate("{{.Name}} - {{.Season}}x{{.Episode}}{{.Ext}}")
-fs.SetMovieTemplate("{{.Name}} ({{.Year}}){{.Ext}}")
+fs.SetTVShowTemplate("{{.Name}} - {{.Season}}x{{.Episode}}")
+fs.SetMovieTemplate("{{.Name}} ({{.Year}})")
 ```
 
 ### Template Validation
 
 ```go
-template := "{{.Name}} - S{{.Season}}E{{.Episode}}{{.Ext}}"
+template := "{{.Name}} - S{{.Season}}E{{.Episode}}"
 if err := fs.ValidateTemplate(template); err != nil {
     fmt.Printf("Invalid template: %v\n", err)
 }
@@ -84,11 +85,11 @@ if err := fs.ValidateTemplate(template); err != nil {
 
 ```go
 // Preview what a template would generate
-output, err := fs.PreviewTemplateOutput("{{.Name}} S{{.Season}}E{{.Episode}}{{.Ext}}", false)
+output, err := fs.PreviewTemplateOutput("{{.Name}} S{{.Season}}E{{.Episode}}", false)
 if err != nil {
     fmt.Printf("Error: %v\n", err)
 } else {
-    fmt.Printf("Preview: %s\n", output) // "Sample TV Show S01E05.mkv"
+    fmt.Printf("Preview: %s\n", output) // "Sample TV Show S01E05" (extension added automatically)
 }
 ```
 
@@ -115,21 +116,21 @@ The template system automatically handles:
 
 ```go
 // Template that shows year only if available
-template := "{{.Name}}{{if .Year}} ({{.Year}}){{end}}{{.Ext}}"
+template := "{{.Name}}{{if .Year}} ({{.Year}}){{end}}"
 ```
 
 ### Multiple Field Formatting
 
 ```go
 // Template with multiple optional fields
-template := "{{.Name}}{{if .Year}} ({{.Year}}){{end}}{{if .Genre}} [{{.Genre}}]{{end}}{{.Ext}}"
+template := "{{.Name}}{{if .Year}} ({{.Year}}){{end}}{{if .Genre}} [{{.Genre}}]{{end}}"
 ```
 
 ### Custom Number Formatting
 
 ```go
 // Template with custom season/episode format
-template := "{{.Name}} Season {{.Season}} Episode {{.Episode}}{{if .Title}} - {{.Title}}{{end}}{{.Ext}}"
+template := "{{.Name}} Season {{.Season}} Episode {{.Episode}}{{if .Title}} - {{.Title}}{{end}}"
 ```
 
 ## Error Handling
@@ -146,8 +147,8 @@ Templates can be stored in configuration files and loaded at runtime:
 
 ```yaml
 templates:
-  tv_show: "{{.Name}} - S{{.Season}}E{{.Episode}} - {{.Title}}{{.Ext}}"
-  movie: "{{.Name}} ({{.Year}}){{.Ext}}"
+  tv_show: "{{.Name}} - S{{.Season}}E{{.Episode}} - {{.Title}}"
+  movie: "{{.Name}} ({{.Year}})"
 ```
 
-This allows users to customize filename formats without modifying code.
+This allows users to customize filename formats without modifying code. Extensions are automatically preserved from the original files.

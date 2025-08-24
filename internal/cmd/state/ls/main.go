@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"goname/internal/cmd/common"
 	"goname/internal/models"
 	"goname/pkg/log"
 	"goname/pkg/services"
@@ -55,26 +56,19 @@ func Run(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	// Color setup
-	green := color.New(color.FgGreen, color.Bold)
-	red := color.New(color.FgRed, color.Bold)
-	cyan := color.New(color.FgCyan)
-	yellow := color.New(color.FgYellow)
-	gray := color.New(color.FgHiBlack)
-
 	fmt.Printf("Found %d rename operation(s):\n\n", len(entries))
 
 	for _, entry := range entries {
 		// Status indicator
 		if entry.Reverted {
-			red.Print("✗ REVERTED ")
+			common.Red.Print("REVERTED ")
 		} else {
-			green.Print("✓ ACTIVE   ")
+			common.Green.Print("ACTIVE   ")
 		}
 
 		// Entry ID and timestamp
-		cyan.Printf("[%s] ", entry.ID[:8])
-		gray.Printf("%s\n", entry.Timestamp.Format("2006-01-02 15:04:05"))
+		common.Cyan.Printf("[%s] ", entry.ID[:8])
+		common.Gray.Printf("%s\n", entry.Timestamp.Format("2006-01-02 15:04:05"))
 
 		// Original and new names
 		fmt.Printf("  Original: %s\n", entry.OriginalName)
@@ -85,15 +79,15 @@ func Run(cmd *cobra.Command, args []string) {
 			switch mediaInfo := entry.MediaInfo.(type) {
 			case map[string]interface{}:
 				if title, ok := mediaInfo["title"].(string); ok {
-					yellow.Printf("  Media:    %s", title)
+					common.Yellow.Printf("  Media:    %s", title)
 					if year, ok := mediaInfo["release_date"].(string); ok && len(year) >= 4 {
-						yellow.Printf(" (%s)", year[:4])
+						common.Yellow.Printf(" (%s)", year[:4])
 					}
 					fmt.Println()
 				} else if name, ok := mediaInfo["name"].(string); ok {
-					yellow.Printf("  Media:    %s", name)
+					common.Yellow.Printf("  Media:    %s", name)
 					if year, ok := mediaInfo["first_air_date"].(string); ok && len(year) >= 4 {
-						yellow.Printf(" (%s)", year[:4])
+						common.Yellow.Printf(" (%s)", year[:4])
 					}
 					fmt.Println()
 				}

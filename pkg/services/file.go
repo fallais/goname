@@ -1,7 +1,9 @@
 package services
 
 import (
+	"bytes"
 	"fmt"
+	"html/template"
 	"os"
 	"path/filepath"
 	"slices"
@@ -34,38 +36,30 @@ type FileService struct {
 }
 
 // NewFileService creates a new file service instance
-func NewFileService() *FileService {
-	return &FileService{
+func NewFileService(tvTemplate, movieTemplate string, conflictResolver *ConflictResolver) *FileService {
+	fileService := &FileService{
 		supportedExtensions: SupportedExtensions,
-		tvShowTemplate:      TVShowTemplateDefault,
-		movieTemplate:       MovieTemplateDefault,
-		conflictResolver:    NewConflictResolver(AppendNumber), // Default strategy
 	}
-}
 
-// NewFileServiceWithTemplates creates a new file service instance with custom templates
-func NewFileServiceWithTemplates(tvTemplate, movieTemplate string) *FileService {
-	return &FileService{
-		supportedExtensions: SupportedExtensions,
-		tvShowTemplate:      tvTemplate,
-		movieTemplate:       movieTemplate,
-		conflictResolver:    NewConflictResolver(AppendNumber), // Default strategy
+	if tvTemplate != "" {
+		fileService.tvShowTemplate = tvTemplate
+	} else {
+		fileService.tvShowTemplate = TVShowTemplateDefault
 	}
-}
 
-// NewFileServiceWithConflictResolver creates a new file service instance with custom conflict resolver
-func NewFileServiceWithConflictResolver(conflictResolver *ConflictResolver) *FileService {
-	return &FileService{
-		supportedExtensions: SupportedExtensions,
-		tvShowTemplate:      TVShowTemplateDefault,
-		movieTemplate:       MovieTemplateDefault,
-		conflictResolver:    conflictResolver,
+	if movieTemplate != "" {
+		fileService.movieTemplate = movieTemplate
+	} else {
+		fileService.movieTemplate = MovieTemplateDefault
 	}
-}
 
-// SetConflictResolver sets the conflict resolution strategy
-func (fs *FileService) SetConflictResolver(resolver *ConflictResolver) {
-	fs.conflictResolver = resolver
+	if conflictResolver != nil {
+		fileService.conflictResolver = conflictResolver
+	} else {
+		fileService.conflictResolver = NewConflictResolver(AppendNumber)
+	}
+
+	return fileService
 }
 
 // GetConflictResolver returns the current conflict resolver
@@ -99,6 +93,41 @@ func (fs *FileService) GetTVShowTemplate() string {
 // GetMovieTemplate returns the current movie template
 func (fs *FileService) GetMovieTemplate() string {
 	return fs.movieTemplate
+}
+
+// ValidateTemplate validates that a template string is valid and does not contain {{.Ext}}
+// since extensions are now handled automatically
+func (fs *FileService) ValidateTemplate(templateStr string) error {
+	// Check if template contains the old {{.Ext}} field
+	if strings.Contains(templateStr, "{{.Ext}}") || strings.Contains(templateStr, "{{ .Ext }}") {
+		return fmt.Errorf("template contains {{.Ext}} field - extensions are now handled automatically and should not be part of templates")
+	}
+
+	// Try to parse the template
+	tmpl, err := template.New("validation").Parse(templateStr)
+	if err != nil {
+		return fmt.Errorf("template parsing error: %w", err)
+	}
+
+	// Create sample data to test template execution
+	sampleData := &TemplateData{
+		Name:     "Sample Movie",
+		Title:    "Sample Episode",
+		Year:     2023,
+		Season:   1,
+		Episode:  5,
+		Director: "Sample Director",
+		Genre:    "Action",
+	}
+
+	// Try to execute the template with sample data
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, sampleData)
+	if err != nil {
+		return fmt.Errorf("template execution error: %w", err)
+	}
+
+	return nil
 }
 
 // ScanDirectory scans a directory for video files
@@ -225,9 +254,4 @@ func sanitizeFilename(filename string) string {
 	// Remove multiple spaces and trim
 	filename = strings.Join(strings.Fields(filename), " ")
 	return strings.TrimSpace(filename)
-}
-
-// padNumber pads a number with leading zeros
-func padNumber(num, width int) string {
-	return fmt.Sprintf("%0*d", width, num)
 }
