@@ -2,7 +2,6 @@ package plan
 
 import (
 	"fmt"
-	"log"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -10,24 +9,35 @@ import (
 	"goname/internal/models"
 	"goname/pkg/database"
 	"goname/pkg/database/tmdb"
+	"goname/pkg/log"
 	"goname/pkg/services"
 
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 const AddCarriageReturn = false
 
 func Run(cmd *cobra.Command, args []string) {
-	if viper.GetString("tmdb.api_key") == "" {
-		log.Fatal("TMDB API key is required. Set it via --api-key flag or TMDB_API_KEY environment variable")
-	}
-
 	// Initialize services
-	tmdbService, err := tmdb.New(viper.GetString("tmdb.api_key"))
-	if err != nil {
-		log.Fatalf("failed to initialize TMDB service: %v", err)
+	var databaseService database.VideoDatabase
+	switch viper.GetString("db") {
+	case "tmdb":
+		tmdbService, err := tmdb.New(viper.GetString("tmdb.api_key"))
+		if err != nil {
+			log.Fatal("failed to initialize TMDB service", zap.Error(err))
+		}
+
+		databaseService = tmdbService
+	case "tvdb":
+		/* tvdbService, err := tvdb.New(viper.GetString("tvdb.api_key"))
+		if err != nil {
+			log.Fatalf("failed to initialize TVDB service: %v", err)
+		} */
+	default:
+		log.Fatal("unsupported database type", zap.String("db", viper.GetString("db")))
 	}
 
 	fileService := services.NewFileService()
@@ -36,7 +46,7 @@ func Run(cmd *cobra.Command, args []string) {
 	fmt.Printf("Scanning directory: %s\n", viper.GetString("dir"))
 	videoFiles, err := fileService.ScanDirectory(viper.GetString("dir"), viper.GetBool("recursive"))
 	if err != nil {
-		log.Fatalf("failed to scan directory: %v", err)
+		log.Fatal("failed to scan directory", zap.Error(err))
 	}
 
 	if len(videoFiles) == 0 {
@@ -58,7 +68,7 @@ func Run(cmd *cobra.Command, args []string) {
 	errorCount := 0
 
 	for _, videoFile := range videoFiles {
-		result := processVideoFileForPlan(videoFile, tmdbService, fileService, viper.GetString("type"))
+		result := processVideoFileForPlan(videoFile, databaseService, fileService, viper.GetString("type"))
 		results = append(results, result)
 
 		if result.Success {

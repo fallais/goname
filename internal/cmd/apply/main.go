@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"goname/internal/models"
+	"goname/pkg/database"
+	"goname/pkg/database/tmdb"
 	"goname/pkg/log"
 	"goname/pkg/services"
 
@@ -20,16 +22,29 @@ func Run(cmd *cobra.Command, args []string) {
 	log.Debug("goname is starting", zap.String("command", "apply"))
 
 	// Initialize services
-	tmdbService, err := services.NewTMDBService(viper.GetString("tmdb.api_key"))
-	if err != nil {
-		log.Fatal("failed to initialize TMDB service", zap.Error(err))
+	var databaseService database.VideoDatabase
+	switch viper.GetString("db") {
+	case "tmdb":
+		tmdbService, err := tmdb.New(viper.GetString("tmdb.api_key"))
+		if err != nil {
+			log.Fatal("failed to initialize TMDB service", zap.Error(err))
+		}
+
+		databaseService = tmdbService
+	case "tvdb":
+		/* tvdbService, err := tvdb.New(viper.GetString("tvdb.api_key"))
+		if err != nil {
+			log.Fatalf("failed to initialize TVDB service: %v", err)
+		} */
+	default:
+		log.Fatal("unsupported database type", zap.String("db", viper.GetString("db")))
 	}
 
 	fileService := services.NewFileService()
 
 	// Scan for video files
-	fmt.Printf("Scanning directory: %s\n", viper.GetString("apply.input_dir"))
-	videoFiles, err := fileService.ScanDirectory(viper.GetString("apply.input_dir"), viper.GetBool("apply.recursive"))
+	fmt.Printf("Scanning directory: %s\n", viper.GetString("dir"))
+	videoFiles, err := fileService.ScanDirectory(viper.GetString("dir"), viper.GetBool("recursive"))
 	if err != nil {
 		log.Fatal("failed to scan directory", zap.Error(err))
 	}
@@ -52,7 +67,7 @@ func Run(cmd *cobra.Command, args []string) {
 	for i, videoFile := range videoFiles {
 		fmt.Printf("Processing [%d/%d]: %s\n", i+1, len(videoFiles), cyan.Sprint(videoFile.OriginalName))
 
-		result := processVideoFileForApply(videoFile, tmdbService, fileService, viper.GetString("media.type"))
+		result := processVideoFileForApply(videoFile, databaseService, fileService, viper.GetString("type"))
 		results = append(results, result)
 
 		if result.Success {
@@ -99,6 +114,13 @@ func Run(cmd *cobra.Command, args []string) {
 			}
 		}
 
+		// Initialize state service for tracking renames
+		stateService, err := services.NewStateService()
+		if err != nil {
+			log.Error("failed to initialize state service", zap.Error(err))
+			yellow.Println("Warning: State tracking will be disabled")
+		}
+
 		fmt.Println("\nApplying renames...")
 		for _, result := range results {
 			if result.Success {
@@ -114,6 +136,20 @@ func Run(cmd *cobra.Command, args []string) {
 					fmt.Print("  ")
 					green.Print("✓ ")
 					fmt.Printf("Renamed: %s\n", result.NewFileName)
+
+					// Add to state for potential revert
+					if stateService != nil {
+						if err := stateService.AddRenameOperation(
+							oldPath,
+							newPath,
+							result.VideoFile.OriginalName,
+							result.NewFileName,
+							result.MediaInfo,
+						); err != nil {
+							log.Error("failed to add rename to state", zap.Error(err))
+							yellow.Printf("    Warning: Failed to track rename in state\n")
+						}
+					}
 				}
 			}
 		}
@@ -121,7 +157,7 @@ func Run(cmd *cobra.Command, args []string) {
 }
 
 // processVideoFileForApply processes a single video file and returns a rename result
-func processVideoFileForApply(videoFile models.VideoFile, tmdbService *services.TMDBService, fileService *services.FileService, mediaTypeOverride string) models.RenameResult {
+func processVideoFileForApply(videoFile models.VideoFile, tmdbService database.VideoDatabase, fileService *services.FileService, mediaTypeOverride string) models.RenameResult {
 	result := models.RenameResult{
 		VideoFile: videoFile,
 		Success:   false,

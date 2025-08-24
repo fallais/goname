@@ -6,13 +6,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	planDir       string
-	planRecursive bool
-	planAPIKey    string
-	planMediaType string
-)
-
 // planCmd represents the plan command
 var planCmd = &cobra.Command{
 	Use:   "plan",
@@ -22,14 +15,7 @@ and displaying the proposed changes. This is similar to 'terraform plan' - it sh
 what would happen without making any actual changes.
 
 The command will scan for video files, attempt to match them with movies or TV shows
-from TMDB, and display the current filename alongside the proposed new filename.
-
-Examples:
-  # Plan rename for movies in current directory
-  goname plan --type movie --api-key YOUR_API_KEY
-  
-  # Plan rename for TV shows recursively
-  goname plan --dir /path/to/shows --type tv --recursive --api-key YOUR_API_KEY`,
+from TMDB, and display the current filename alongside the proposed new filename.`,
 
 	Run: plan.Run,
 }

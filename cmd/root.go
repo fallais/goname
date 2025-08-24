@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"goname/pkg/log"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -33,14 +34,16 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.goname.yaml)")
-	rootCmd.PersistentFlags().StringVarP(&applyInputDir, "dir", "d", ".", "Directory to scan for video files")
-	rootCmd.PersistentFlags().BoolVarP(&applyRecursive, "recursive", "r", false, "Scan directories recursively")
-	rootCmd.PersistentFlags().StringVar(&applyTmdbAPIKey, "tmdb_api_key", "", "TMDB API key (can also be set via TMDB_API_KEY env var)")
-	rootCmd.PersistentFlags().StringVarP(&planMediaType, "type", "t", "auto", "Media type: movie, tv, or auto")
+	rootCmd.PersistentFlags().StringP("dir", "d", ".", "Directory to scan for video files")
+	rootCmd.PersistentFlags().BoolP("recursive", "r", false, "Scan directories recursively")
+	rootCmd.PersistentFlags().String("tmdb_api_key", "", "TMDB API key")
+	rootCmd.PersistentFlags().StringP("type", "t", "auto", "Media type: movie, tv, or auto")
+	rootCmd.PersistentFlags().String("db", "tmdb", "Database: tmdb (The Movie Database) or tvdb (The TV Database)")
 
 	// Bind flags to viper
-	viper.BindPFlag("tmdb.api_key", rootCmd.Flags().Lookup("tmdb_api_key"))
-	viper.BindPFlag("media.type", rootCmd.Flags().Lookup("type"))
+	viper.BindPFlag("tmdb.api_key", rootCmd.PersistentFlags().Lookup("tmdb_api_key"))
+	viper.BindPFlag("type", rootCmd.PersistentFlags().Lookup("type"))
+	viper.BindPFlag("db", rootCmd.PersistentFlags().Lookup("db"))
 
 	// Env
 	viper.BindEnv("tmdb.api_key", "TMDB_API_KEY")
@@ -66,4 +69,6 @@ func initConfig() {
 
 	// If a config file is found, read it in.
 	viper.ReadInConfig()
+
+	log.Init(viper.GetBool("debug"))
 }

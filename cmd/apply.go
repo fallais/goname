@@ -6,15 +6,6 @@ import (
 	"goname/internal/cmd/apply"
 )
 
-var (
-	applyInputDir    string
-	applyRecursive   bool
-	applyDryRun      bool
-	applyTmdbAPIKey  string
-	applyMediaType   string
-	applyInteractive bool
-)
-
 // applyCmd represents the apply command
 var applyCmd = &cobra.Command{
 	Use:   "apply",
@@ -40,7 +31,6 @@ Examples:
 func init() {
 	rootCmd.AddCommand(applyCmd)
 
-	applyCmd.Flags().BoolVar(&applyDryRun, "dry-run", false, "Show what would be renamed without actually renaming")
-	applyCmd.Flags().StringVarP(&applyMediaType, "type", "t", "auto", "Media type: movie, tv, or auto")
-	applyCmd.Flags().BoolVarP(&applyInteractive, "interactive", "i", false, "Interactive mode for manual confirmation")
+	applyCmd.Flags().Bool("auto-approve", false, "Will not prompt for confirmation before applying changes")
+	applyCmd.Flags().BoolP("interactive", "i", false, "Interactive mode for manual confirmation")
 }
