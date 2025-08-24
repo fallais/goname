@@ -8,20 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"goname/internal/models"
 	"goname/pkg/log"
 
 	"go.uber.org/zap"
-)
-
-// ConflictStrategy defines how to handle naming conflicts
-type ConflictStrategy int
-
-const (
-	SkipConflict ConflictStrategy = iota
-	AppendNumber
-	AppendTimestamp
-	PromptUser
-	Overwrite
 )
 
 // ConflictResult represents the result of conflict resolution
@@ -33,15 +23,15 @@ type ConflictResult struct {
 
 // ConflictResolver handles file naming conflicts during rename operations
 type ConflictResolver struct {
-	strategy    ConflictStrategy
+	strategy    models.ConflictStrategy
 	interactive bool
 }
 
 // NewConflictResolver creates a new conflict resolver with the specified strategy
-func NewConflictResolver(strategy ConflictStrategy) *ConflictResolver {
+func NewConflictResolver(strategy models.ConflictStrategy) *ConflictResolver {
 	return &ConflictResolver{
 		strategy:    strategy,
-		interactive: strategy == PromptUser,
+		interactive: strategy == models.PromptUser,
 	}
 }
 
@@ -74,13 +64,13 @@ func (cr *ConflictResolver) ResolveConflict(targetPath string) (*ConflictResult,
 	log.Info("Conflict detected", zap.String("target_path", targetPath))
 
 	switch cr.strategy {
-	case SkipConflict:
+	case models.SkipConflict:
 		result.Skipped = true
 		result.Action = "skipped"
 		result.ResolvedPath = ""
 		return result, nil
 
-	case AppendNumber:
+	case models.AppendNumber:
 		resolvedPath, err := cr.appendNumber(targetPath)
 		if err != nil {
 			return nil, err
@@ -89,7 +79,7 @@ func (cr *ConflictResolver) ResolveConflict(targetPath string) (*ConflictResult,
 		result.Action = "append_number"
 		return result, nil
 
-	case AppendTimestamp:
+	case models.AppendTimestamp:
 		resolvedPath, err := cr.appendTimestamp(targetPath)
 		if err != nil {
 			return nil, err
@@ -98,7 +88,7 @@ func (cr *ConflictResolver) ResolveConflict(targetPath string) (*ConflictResult,
 		result.Action = "append_timestamp"
 		return result, nil
 
-	case PromptUser:
+	case models.PromptUser:
 		if !cr.interactive {
 			// Fall back to skip if not interactive
 			result.Skipped = true
@@ -115,7 +105,7 @@ func (cr *ConflictResolver) ResolveConflict(targetPath string) (*ConflictResult,
 		result.Action = "user_choice"
 		return result, nil
 
-	case Overwrite:
+	case models.Overwrite:
 		result.Action = "overwrite"
 		return result, nil
 
@@ -194,15 +184,15 @@ func (cr *ConflictResolver) promptUser(targetPath string) (string, bool, error) 
 // GetStrategyName returns a human-readable name for the conflict strategy
 func (cr *ConflictResolver) GetStrategyName() string {
 	switch cr.strategy {
-	case SkipConflict:
+	case models.SkipConflict:
 		return "skip"
-	case AppendNumber:
+	case models.AppendNumber:
 		return "append_number"
-	case AppendTimestamp:
+	case models.AppendTimestamp:
 		return "append_timestamp"
-	case PromptUser:
+	case models.PromptUser:
 		return "prompt_user"
-	case Overwrite:
+	case models.Overwrite:
 		return "overwrite"
 	default:
 		return "unknown"
@@ -210,19 +200,19 @@ func (cr *ConflictResolver) GetStrategyName() string {
 }
 
 // ParseConflictStrategy parses a string into a ConflictStrategy
-func ParseConflictStrategy(strategy string) (ConflictStrategy, error) {
+func ParseConflictStrategy(strategy string) (models.ConflictStrategy, error) {
 	switch strings.ToLower(strategy) {
 	case "skip":
-		return SkipConflict, nil
+		return models.SkipConflict, nil
 	case "append":
-		return AppendNumber, nil
+		return models.AppendNumber, nil
 	case "timestamp":
-		return AppendTimestamp, nil
+		return models.AppendTimestamp, nil
 	case "prompt":
-		return PromptUser, nil
+		return models.PromptUser, nil
 	case "overwrite":
-		return Overwrite, nil
+		return models.Overwrite, nil
 	default:
-		return AppendNumber, fmt.Errorf("unknown conflict strategy: %s", strategy)
+		return models.AppendNumber, fmt.Errorf("unknown conflict strategy: %s", strategy)
 	}
 }

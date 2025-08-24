@@ -20,7 +20,7 @@ var patterns = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)e(\d{1,2})(?:[^0-9]|$)`),
 }
 
-func extractSeasonEpisode(filename string) (season, episode int) {
+func ExtractSeasonEpisode(filename string) (season, episode int) {
 	lower := strings.ToLower(filename)
 
 	for _, re := range patterns {

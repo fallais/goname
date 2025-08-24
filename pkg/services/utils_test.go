@@ -123,7 +123,7 @@ func TestExtractSeasonEpisode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			season, episode := extractSeasonEpisode(tt.filename)
+			season, episode := ExtractSeasonEpisode(tt.filename)
 			if season != tt.expectedSeason {
 				t.Errorf("extractSeasonEpisode(%q) season = %d, want %d", tt.filename, season, tt.expectedSeason)
 			}
@@ -145,7 +145,7 @@ func BenchmarkExtractSeasonEpisode(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, filename := range testCases {
-			extractSeasonEpisode(filename)
+			ExtractSeasonEpisode(filename)
 		}
 	}
 }

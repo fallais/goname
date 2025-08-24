@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"goname/internal/cmd/common"
-	"goname/internal/models"
+	"goname/internal/plans"
 	"goname/pkg/database"
 	"goname/pkg/database/tmdb"
 	"goname/pkg/log"
@@ -52,10 +52,10 @@ func Run(cmd *cobra.Command, args []string) {
 	fileService := services.NewFileService("", "", conflictResolver)
 
 	// Create plan service
-	planService := services.NewPlanService(databaseService, fileService)
+	planService := plans.NewPlanService(databaseService, fileService)
 
 	// Create plan conflict resolver
-	planConflictResolver := services.NewPlanConflictResolver(conflictStrategy)
+	planConflictResolver := plans.NewPlanConflictResolver(conflictStrategy)
 
 	// Scan for video files
 	fmt.Printf("Scanning directory: %s\n", viper.GetString("dir"))
@@ -115,7 +115,7 @@ func Run(cmd *cobra.Command, args []string) {
 
 	fmt.Println("\nApplying renames...")
 	for _, result := range plan.Operations {
-		if result.Status == models.OperationStatusReady {
+		if result.Status == plans.OperationStatusReady {
 			oldPath := result.VideoFile.Path
 			dir := filepath.Dir(oldPath)
 			newPath := filepath.Join(dir, result.TargetName)

@@ -2,11 +2,9 @@ package plan
 
 import (
 	"fmt"
-	"path/filepath"
-	"strings"
 
 	"goname/internal/cmd/common"
-	"goname/internal/models"
+	"goname/internal/plans"
 	"goname/pkg/database"
 	"goname/pkg/database/tmdb"
 	"goname/pkg/log"
@@ -47,10 +45,10 @@ func Run(cmd *cobra.Command, args []string) {
 	fileService := services.NewFileService("", "", conflictResolver)
 
 	// Create plan service
-	planService := services.NewPlanService(databaseService, fileService)
+	planService := plans.NewPlanService(databaseService, fileService)
 
 	// Create plan conflict resolver
-	planConflictResolver := services.NewPlanConflictResolver(conflictStrategy)
+	planConflictResolver := plans.NewPlanConflictResolver(conflictStrategy)
 
 	// Scan for video files
 	fmt.Printf("Scanning directory: %s\n", viper.GetString("dir"))
@@ -82,64 +80,5 @@ func Run(cmd *cobra.Command, args []string) {
 	}
 
 	// Display results
-	displayPlanResults(plan)
-}
-
-// displayPlanResults displays the results of a rename plan
-func displayPlanResults(plan *models.Plan) {
-	// Color setup
-	green := color.New(color.FgGreen, color.Bold)
-	red := color.New(color.FgRed, color.Bold)
-	yellow := color.New(color.FgYellow)
-	blue := color.New(color.FgBlue)
-
-	alreadyCorrectCount := 0
-	needsRenameCount := 0
-	errorCount := 0
-	skippedCount := 0
-
-	fmt.Println("GoName will perform the following actions:")
-	fmt.Println()
-
-	for _, operation := range plan.Operations {
-		switch operation.Status {
-		case models.OperationStatusReady:
-			// Check if the current filename already matches the proposed new filename
-			currentBaseName := strings.TrimSuffix(operation.VideoFile.OriginalName, filepath.Ext(operation.VideoFile.OriginalName))
-			proposedBaseName := strings.TrimSuffix(operation.TargetName, filepath.Ext(operation.TargetName))
-
-			if currentBaseName == proposedBaseName {
-				// File is already correctly named
-				alreadyCorrectCount++
-				green.Printf("%s\n", operation.VideoFile.OriginalName)
-			} else {
-				// File needs to be renamed
-				needsRenameCount++
-				fmt.Printf("%s → %s\n", operation.VideoFile.OriginalName, yellow.Sprint(operation.TargetName))
-			}
-
-		case models.OperationStatusSkipped:
-			skippedCount++
-			fmt.Printf("%s: %s\n", operation.VideoFile.OriginalName, blue.Sprint("SKIPPED"))
-			if operation.Error != "" {
-				fmt.Printf("    Reason: %s\n", operation.Error)
-			}
-
-		case models.OperationStatusError:
-			errorCount++
-			fmt.Printf("%s: %v\n", operation.VideoFile.OriginalName, red.Sprint(operation.Error))
-
-		case models.OperationStatusConflicted:
-			// This should not happen after conflict resolution
-			errorCount++
-			fmt.Printf("%s: %s\n", operation.VideoFile.OriginalName, red.Sprint("UNRESOLVED CONFLICT"))
-		}
-
-		if AddCarriageReturn {
-			fmt.Println()
-		}
-	}
-
-	// Summary
 	common.DisplayPlanResults(plan)
 }

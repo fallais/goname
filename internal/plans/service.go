@@ -1,4 +1,4 @@
-package services
+package plans
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	"goname/internal/models"
 	"goname/pkg/database"
 	"goname/pkg/log"
+	"goname/pkg/services"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -18,11 +19,11 @@ import (
 // PlanService handles the creation and management of rename plans
 type PlanService struct {
 	databaseService database.VideoDatabase
-	fileService     *FileService
+	fileService     *services.FileService
 }
 
 // NewPlanService creates a new PlanService
-func NewPlanService(databaseService database.VideoDatabase, fileService *FileService) *PlanService {
+func NewPlanService(databaseService database.VideoDatabase, fileService *services.FileService) *PlanService {
 	return &PlanService{
 		databaseService: databaseService,
 		fileService:     fileService,
@@ -30,12 +31,12 @@ func NewPlanService(databaseService database.VideoDatabase, fileService *FileSer
 }
 
 // CreatePlan creates a new rename plan for the given video files
-func (ps *PlanService) CreatePlan(videoFiles []models.VideoFile, mediaTypeOverride string) (*models.Plan, error) {
-	plan := &models.Plan{
+func (ps *PlanService) CreatePlan(videoFiles []models.VideoFile, mediaTypeOverride string) (*Plan, error) {
+	plan := &Plan{
 		ID:         uuid.New().String(),
 		Timestamp:  time.Now(),
-		Operations: make([]models.PlannedOperation, 0, len(videoFiles)),
-		Conflicts:  make([]models.Conflict, 0),
+		Operations: make([]PlannedOperation, 0, len(videoFiles)),
+		Conflicts:  make([]Conflict, 0),
 		Resolved:   false,
 	}
 
@@ -44,7 +45,7 @@ func (ps *PlanService) CreatePlan(videoFiles []models.VideoFile, mediaTypeOverri
 		operation, err := ps.createPlannedOperation(videoFile, mediaTypeOverride)
 		if err != nil {
 			log.Error("failed to create planned operation", zap.Error(err), zap.String("file", videoFile.Path))
-			operation.Status = models.OperationStatusError
+			operation.Status = OperationStatusError
 			operation.Error = err.Error()
 		}
 		plan.Operations = append(plan.Operations, *operation)
@@ -57,22 +58,19 @@ func (ps *PlanService) CreatePlan(videoFiles []models.VideoFile, mediaTypeOverri
 	// Update operation status based on conflicts
 	ps.updateOperationStatuses(plan)
 
-	// Calculate summary
-	plan.Summary = ps.calculateSummary(plan)
-
 	return plan, nil
 }
 
 // createPlannedOperation creates a single planned operation
-func (ps *PlanService) createPlannedOperation(videoFile models.VideoFile, mediaTypeOverride string) (*models.PlannedOperation, error) {
-	operation := &models.PlannedOperation{
+func (ps *PlanService) createPlannedOperation(videoFile models.VideoFile, mediaTypeOverride string) (*PlannedOperation, error) {
+	operation := &PlannedOperation{
 		ID:        uuid.New().String(),
 		VideoFile: videoFile,
-		Status:    models.OperationStatusPending,
+		Status:    OperationStatusPending,
 	}
 
 	// Clean the filename for searching
-	cleanName := CleanTitle(videoFile.OriginalName)
+	cleanName := services.CleanTitle(videoFile.OriginalName)
 	year := database.ExtractYear(videoFile.OriginalName)
 
 	// Determine media type
@@ -96,11 +94,11 @@ func (ps *PlanService) createPlannedOperation(videoFile models.VideoFile, mediaT
 		operation.MediaInfo = movie
 		operation.TargetName = ps.fileService.GenerateMovieFileName(movie, videoFile.Path)
 		operation.TargetPath = filepath.Join(filepath.Dir(videoFile.Path), operation.TargetName)
-		operation.Status = models.OperationStatusReady
+		operation.Status = OperationStatusReady
 
 	case models.MediaTypeTVShow:
 		// For TV shows, we need to extract season and episode numbers
-		season, episode := extractSeasonEpisode(videoFile.OriginalName)
+		season, episode := services.ExtractSeasonEpisode(videoFile.OriginalName)
 		if season == 0 || episode == 0 {
 			return operation, fmt.Errorf("could not extract season/episode information")
 		}
@@ -123,20 +121,20 @@ func (ps *PlanService) createPlannedOperation(videoFile models.VideoFile, mediaT
 		}
 		operation.TargetName = ps.fileService.GenerateTVShowFileName(show, episodeInfo, videoFile.Path)
 		operation.TargetPath = filepath.Join(filepath.Dir(videoFile.Path), operation.TargetName)
-		operation.Status = models.OperationStatusReady
+		operation.Status = OperationStatusReady
 	}
 
 	return operation, nil
 }
 
 // detectConflicts detects conflicts between planned operations
-func (ps *PlanService) detectConflicts(operations []models.PlannedOperation) []models.Conflict {
-	conflicts := make([]models.Conflict, 0)
+func (ps *PlanService) detectConflicts(operations []PlannedOperation) []Conflict {
+	conflicts := make([]Conflict, 0)
 	targetPaths := make(map[string][]string) // targetPath -> []operationID
 
 	// Group operations by target path
 	for _, op := range operations {
-		if op.Status == models.OperationStatusReady {
+		if op.Status == OperationStatusReady {
 			targetPaths[op.TargetPath] = append(targetPaths[op.TargetPath], op.ID)
 		}
 	}
@@ -144,7 +142,7 @@ func (ps *PlanService) detectConflicts(operations []models.PlannedOperation) []m
 	// Check for multiple source conflicts
 	for targetPath, operationIDs := range targetPaths {
 		if len(operationIDs) > 1 {
-			conflict := models.Conflict{
+			conflict := Conflict{
 				ID:           uuid.New().String(),
 				TargetPath:   targetPath,
 				OperationIDs: operationIDs,
@@ -156,7 +154,7 @@ func (ps *PlanService) detectConflicts(operations []models.PlannedOperation) []m
 			// Check if target already exists on disk
 			operationID := operationIDs[0]
 			if fileExists(targetPath) {
-				conflict := models.Conflict{
+				conflict := Conflict{
 					ID:           uuid.New().String(),
 					TargetPath:   targetPath,
 					OperationIDs: []string{operationID},
@@ -172,7 +170,7 @@ func (ps *PlanService) detectConflicts(operations []models.PlannedOperation) []m
 }
 
 // updateOperationStatuses updates operation statuses based on detected conflicts
-func (ps *PlanService) updateOperationStatuses(plan *models.Plan) {
+func (ps *PlanService) updateOperationStatuses(plan *Plan) {
 	// Create a map of operation ID to conflict IDs
 	operationConflicts := make(map[string][]string)
 
@@ -186,28 +184,28 @@ func (ps *PlanService) updateOperationStatuses(plan *models.Plan) {
 	for i := range plan.Operations {
 		op := &plan.Operations[i]
 		if conflictIDs, hasConflict := operationConflicts[op.ID]; hasConflict {
-			op.Status = models.OperationStatusConflicted
+			op.Status = OperationStatusConflicted
 			op.ConflictIDs = conflictIDs
 		}
 	}
 }
 
 // calculateSummary calculates the plan summary
-func (ps *PlanService) calculateSummary(plan *models.Plan) models.PlanSummary {
-	summary := models.PlanSummary{
+func (ps *PlanService) calculateSummary(plan *Plan) PlanSummary {
+	summary := PlanSummary{
 		TotalOperations: len(plan.Operations),
 		TotalConflicts:  len(plan.Conflicts),
 	}
 
 	for _, op := range plan.Operations {
 		switch op.Status {
-		case models.OperationStatusReady:
+		case OperationStatusReady:
 			summary.ReadyOperations++
-		case models.OperationStatusConflicted:
+		case OperationStatusConflicted:
 			summary.ConflictedOperations++
-		case models.OperationStatusSkipped:
+		case OperationStatusSkipped:
 			summary.SkippedOperations++
-		case models.OperationStatusError:
+		case OperationStatusError:
 			summary.ErrorOperations++
 		}
 	}

@@ -2,7 +2,7 @@ package common
 
 import (
 	"fmt"
-	"goname/internal/models"
+	"goname/internal/plans"
 	"path/filepath"
 	"strings"
 
@@ -19,7 +19,7 @@ var (
 )
 
 // DisplayPlanResults displays the results of a rename plan
-func DisplayPlanResults(plan *models.Plan) {
+func DisplayPlanResults(plan *plans.Plan) {
 	alreadyCorrectCount := 0
 	needsRenameCount := 0
 	errorCount := 0
@@ -30,7 +30,7 @@ func DisplayPlanResults(plan *models.Plan) {
 
 	for _, operation := range plan.Operations {
 		switch operation.Status {
-		case models.OperationStatusReady:
+		case plans.OperationStatusReady:
 			// Check if the current filename already matches the proposed new filename
 			currentBaseName := strings.TrimSuffix(operation.VideoFile.OriginalName, filepath.Ext(operation.VideoFile.OriginalName))
 			proposedBaseName := strings.TrimSuffix(operation.TargetName, filepath.Ext(operation.TargetName))
@@ -45,18 +45,18 @@ func DisplayPlanResults(plan *models.Plan) {
 				fmt.Printf("%s → %s\n", operation.VideoFile.OriginalName, Yellow.Sprint(operation.TargetName))
 			}
 
-		case models.OperationStatusSkipped:
+		case plans.OperationStatusSkipped:
 			skippedCount++
 			fmt.Printf("%s: %s\n", operation.VideoFile.OriginalName, Blue.Sprint("SKIPPED"))
 			if operation.Error != "" {
 				fmt.Printf("    Reason: %s\n", operation.Error)
 			}
 
-		case models.OperationStatusError:
+		case plans.OperationStatusError:
 			errorCount++
 			fmt.Printf("%s: %v\n", operation.VideoFile.OriginalName, Red.Sprint(operation.Error))
 
-		case models.OperationStatusConflicted:
+		case plans.OperationStatusConflicted:
 			// This should not happen after conflict resolution
 			errorCount++
 			fmt.Printf("%s: %s\n", operation.VideoFile.OriginalName, Red.Sprint("UNRESOLVED CONFLICT"))
@@ -68,7 +68,7 @@ func DisplayPlanResults(plan *models.Plan) {
 }
 
 // printPlanSummary prints a summary of the plan results
-func printPlanSummary(plan *models.Plan, alreadyCorrectCount, needsRenameCount, errorCount, skippedCount int) {
+func printPlanSummary(plan *plans.Plan, alreadyCorrectCount, needsRenameCount, errorCount, skippedCount int) {
 	fmt.Println()
 	fmt.Println(color.HiBlackString("─────────────────────────────────────────────────────────────"))
 	fmt.Printf("Plan Summary: ")
@@ -88,7 +88,7 @@ func printPlanSummary(plan *models.Plan, alreadyCorrectCount, needsRenameCount, 
 	fmt.Printf(", %d total\n", len(plan.Operations))
 
 	if len(plan.Conflicts) > 0 {
-		fmt.Printf("Conflicts: %d total, %d resolved\n", len(plan.Conflicts), plan.Summary.ResolvedConflicts)
+		fmt.Printf("Conflicts: %d total, %d resolved\n", len(plan.Conflicts), plan.Summary().ResolvedConflicts)
 	}
 
 	if needsRenameCount > 0 {

@@ -56,7 +56,7 @@ func NewFileService(tvTemplate, movieTemplate string, conflictResolver *Conflict
 	if conflictResolver != nil {
 		fileService.conflictResolver = conflictResolver
 	} else {
-		fileService.conflictResolver = NewConflictResolver(AppendNumber)
+		fileService.conflictResolver = NewConflictResolver(models.AppendNumber)
 	}
 
 	return fileService
