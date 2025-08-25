@@ -44,12 +44,6 @@ func Run(cmd *cobra.Command, args []string) {
 	// Create file service
 	fileService := services.NewFileService("", "", conflictResolver)
 
-	// Create plan service
-	planService := plans.NewPlanService(databaseService, fileService)
-
-	// Create plan conflict resolver
-	planConflictResolver := plans.NewPlanConflictResolver(conflictStrategy)
-
 	// Scan for video files
 	fmt.Printf("Scanning directory: %s\n", viper.GetString("dir"))
 	fmt.Printf("Conflict resolution strategy: %s\n", conflictResolver.GetStrategyName())
@@ -66,7 +60,7 @@ func Run(cmd *cobra.Command, args []string) {
 	fmt.Printf("Found %d video file(s)\n\n", len(videoFiles))
 
 	// Create the plan
-	plan, err := planService.CreatePlan(videoFiles, viper.GetString("type"))
+	plan, err := plans.NewPlan(videoFiles, viper.GetString("type"), databaseService, fileService)
 	if err != nil {
 		log.Fatal("failed to create plan", zap.Error(err))
 	}
@@ -74,7 +68,7 @@ func Run(cmd *cobra.Command, args []string) {
 	// Resolve conflicts
 	if len(plan.Conflicts) > 0 {
 		log.Debug("conflicts detected", zap.Int("nb_conflicts", len(plan.Conflicts)))
-		if err := planConflictResolver.ResolvePlanConflicts(plan); err != nil {
+		if err := plan.ResolveConflicts(conflictStrategy); err != nil {
 			log.Fatal("failed to resolve conflicts", zap.Error(err))
 		}
 	}

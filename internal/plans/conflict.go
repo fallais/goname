@@ -1,271 +1,35 @@
 package plans
 
 import (
-	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"goname/internal/models"
-	"goname/pkg/log"
-
-	"go.uber.org/zap"
 )
 
-// PlanConflictResolver handles conflict resolution for rename plans
-type PlanConflictResolver struct {
-	strategy models.ConflictStrategy
+// Conflict represents a naming conflict between changes
+type Conflict struct {
+	ID           string              `json:"id"`
+	TargetPath   string              `json:"target_path"`
+	ChangeIDs    []string            `json:"change_ids"`
+	ConflictType models.ConflictType `json:"conflict_type"`
+	Resolved     bool                `json:"resolved"`
+	Resolution   ConflictResolution  `json:"resolution,omitempty"`
 }
 
-// NewPlanConflictResolver creates a new plan conflict resolver
-func NewPlanConflictResolver(strategy models.ConflictStrategy) *PlanConflictResolver {
-	return &PlanConflictResolver{
-		strategy: strategy,
-	}
+// ConflictResolution represents how a conflict was resolved
+type ConflictResolution struct {
+	Strategy      string            `json:"strategy"`
+	Modifications map[string]string `json:"modifications"` // changeID -> new target path
+	Timestamp     time.Time         `json:"timestamp"`
 }
 
-// ResolvePlanConflicts resolves all conflicts in a plan using the configured strategy
-func (pcr *PlanConflictResolver) ResolvePlanConflicts(plan *Plan) error {
-	if plan.Resolved {
-		return fmt.Errorf("plan is already resolved")
-	}
-
-	for i := range plan.Conflicts {
-		conflict := &plan.Conflicts[i]
-		if !conflict.Resolved {
-			if err := pcr.resolveConflict(plan, conflict); err != nil {
-				log.Error("failed to resolve conflict", zap.Error(err), zap.String("conflict_id", conflict.ID))
-				return fmt.Errorf("failed to resolve conflict %s: %w", conflict.ID, err)
-			}
+// removeConflictID removes a specific conflict ID from a slice of conflict IDs
+func removeConflictID(conflictIDs []string, conflictID string) []string {
+	result := make([]string, 0, len(conflictIDs))
+	for _, id := range conflictIDs {
+		if id != conflictID {
+			result = append(result, id)
 		}
 	}
-
-	// Update plan status
-	pcr.updatePlanStatus(plan)
-	return nil
-}
-
-// resolveConflict resolves a single conflict
-func (pcr *PlanConflictResolver) resolveConflict(plan *Plan, conflict *Conflict) error {
-	switch conflict.ConflictType {
-	case models.ConflictTypeMultipleSource:
-		return pcr.resolveMultipleSourceConflict(plan, conflict)
-	case models.ConflictTypeTargetExists:
-		return pcr.resolveTargetExistsConflict(plan, conflict)
-	default:
-		return fmt.Errorf("unknown conflict type: %s", conflict.ConflictType)
-	}
-}
-
-// resolveMultipleSourceConflict resolves conflicts where multiple files want the same target
-func (pcr *PlanConflictResolver) resolveMultipleSourceConflict(plan *Plan, conflict *Conflict) error {
-	modifications := make(map[string]string)
-
-	// Find the operations involved in this conflict
-	operations := make([]*PlannedOperation, 0, len(conflict.OperationIDs))
-	for i := range plan.Operations {
-		op := &plan.Operations[i]
-		for _, opID := range conflict.OperationIDs {
-			if op.ID == opID {
-				operations = append(operations, op)
-				break
-			}
-		}
-	}
-
-	if len(operations) == 0 {
-		return fmt.Errorf("no operations found for conflict")
-	}
-
-	switch pcr.strategy {
-	case models.SkipConflict:
-		// Skip all but the first operation
-		for i := 1; i < len(operations); i++ {
-			operations[i].Status = OperationStatusSkipped
-			operations[i].Error = "skipped due to conflict"
-		}
-
-	case models.AppendNumber, models.AppendTimestamp:
-		// First operation gets the original target, others get modified names
-		for i := 1; i < len(operations); i++ {
-			op := operations[i]
-			newTarget, err := pcr.generateAlternativeTarget(op.TargetPath, pcr.strategy, i)
-			if err != nil {
-				return fmt.Errorf("failed to generate alternative target for operation %s: %w", op.ID, err)
-			}
-			op.TargetPath = newTarget
-			op.TargetName = filepath.Base(newTarget)
-			modifications[op.ID] = newTarget
-		}
-
-	case models.Overwrite:
-		// This doesn't make sense for multiple source conflicts - treat as skip
-		for i := 1; i < len(operations); i++ {
-			operations[i].Status = OperationStatusSkipped
-			operations[i].Error = "skipped due to conflict (overwrite strategy)"
-		}
-
-	default:
-		return fmt.Errorf("unsupported strategy for multiple source conflict: %d", pcr.strategy)
-	}
-
-	// Mark conflict as resolved
-	conflict.Resolved = true
-	conflict.Resolution = ConflictResolution{
-		Strategy:      pcr.getStrategyName(),
-		Modifications: modifications,
-		Timestamp:     time.Now(),
-	}
-
-	return nil
-}
-
-// resolveTargetExistsConflict resolves conflicts where target file already exists
-func (pcr *PlanConflictResolver) resolveTargetExistsConflict(plan *Plan, conflict *Conflict) error {
-	if len(conflict.OperationIDs) != 1 {
-		return fmt.Errorf("target exists conflict should have exactly one operation, got %d", len(conflict.OperationIDs))
-	}
-
-	// Find the operation
-	var operation *PlannedOperation
-	for i := range plan.Operations {
-		op := &plan.Operations[i]
-		if op.ID == conflict.OperationIDs[0] {
-			operation = op
-			break
-		}
-	}
-
-	if operation == nil {
-		return fmt.Errorf("operation not found for conflict")
-	}
-
-	modifications := make(map[string]string)
-
-	switch pcr.strategy {
-	case models.SkipConflict:
-		operation.Status = OperationStatusSkipped
-		operation.Error = "skipped due to existing target file"
-
-	case models.AppendNumber, models.AppendTimestamp:
-		newTarget, err := pcr.generateAlternativeTarget(operation.TargetPath, pcr.strategy, 1)
-		if err != nil {
-			return fmt.Errorf("failed to generate alternative target: %w", err)
-		}
-		operation.TargetPath = newTarget
-		operation.TargetName = filepath.Base(newTarget)
-		modifications[operation.ID] = newTarget
-
-	case models.Overwrite:
-		// Keep original target, file will be overwritten
-		// No changes needed to operation
-
-	default:
-		return fmt.Errorf("unsupported strategy for target exists conflict: %d", pcr.strategy)
-	}
-
-	// Mark conflict as resolved
-	conflict.Resolved = true
-	conflict.Resolution = ConflictResolution{
-		Strategy:      pcr.getStrategyName(),
-		Modifications: modifications,
-		Timestamp:     time.Now(),
-	}
-
-	return nil
-}
-
-// generateAlternativeTarget generates an alternative target path using the specified strategy
-func (pcr *PlanConflictResolver) generateAlternativeTarget(originalPath string, strategy models.ConflictStrategy, index int) (string, error) {
-	ext := filepath.Ext(originalPath)
-	base := strings.TrimSuffix(originalPath, ext)
-
-	switch strategy {
-	case models.AppendNumber:
-		return fmt.Sprintf("%s (%d)%s", base, index, ext), nil
-	case models.AppendTimestamp:
-		timestamp := time.Now().Format("20060102_150405")
-		return fmt.Sprintf("%s_%s%s", base, timestamp, ext), nil
-	default:
-		return "", fmt.Errorf("unsupported strategy: %d", strategy)
-	}
-}
-
-// updatePlanStatus updates the overall plan status after conflict resolution
-func (pcr *PlanConflictResolver) updatePlanStatus(plan *Plan) {
-	allResolved := true
-	for _, conflict := range plan.Conflicts {
-		if !conflict.Resolved {
-			allResolved = false
-			break
-		}
-	}
-
-	if allResolved {
-		plan.Resolved = true
-		// Update operation statuses from conflicted to ready where applicable
-		for i := range plan.Operations {
-			op := &plan.Operations[i]
-			if op.Status == OperationStatusConflicted && op.Error == "" {
-				op.Status = OperationStatusReady
-			}
-		}
-	}
-}
-
-// calculateSummary recalculates the plan summary
-func (pcr *PlanConflictResolver) calculateSummary(plan *Plan) PlanSummary {
-	summary := PlanSummary{
-		TotalOperations: len(plan.Operations),
-		TotalConflicts:  len(plan.Conflicts),
-	}
-
-	for _, op := range plan.Operations {
-		switch op.Status {
-		case OperationStatusReady:
-			summary.ReadyOperations++
-		case OperationStatusConflicted:
-			summary.ConflictedOperations++
-		case OperationStatusSkipped:
-			summary.SkippedOperations++
-		case OperationStatusError:
-			summary.ErrorOperations++
-		}
-	}
-
-	for _, conflict := range plan.Conflicts {
-		if conflict.Resolved {
-			summary.ResolvedConflicts++
-		}
-	}
-
-	return summary
-}
-
-// getStrategyName returns a string representation of the conflict strategy
-func (pcr *PlanConflictResolver) getStrategyName() string {
-	switch pcr.strategy {
-	case models.SkipConflict:
-		return "skip"
-	case models.AppendNumber:
-		return "append_number"
-	case models.AppendTimestamp:
-		return "append_timestamp"
-	case models.PromptUser:
-		return "prompt_user"
-	case models.Overwrite:
-		return "overwrite"
-	default:
-		return "unknown"
-	}
-}
-
-// SetStrategy changes the conflict resolution strategy
-func (pcr *PlanConflictResolver) SetStrategy(strategy models.ConflictStrategy) {
-	pcr.strategy = strategy
-}
-
-// GetStrategy returns the current conflict resolution strategy
-func (pcr *PlanConflictResolver) GetStrategy() models.ConflictStrategy {
-	return pcr.strategy
+	return result
 }

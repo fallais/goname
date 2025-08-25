@@ -3,8 +3,6 @@ package common
 import (
 	"fmt"
 	"goname/internal/plans"
-	"path/filepath"
-	"strings"
 
 	"github.com/fatih/color"
 )
@@ -28,38 +26,35 @@ func DisplayPlanResults(plan *plans.Plan) {
 	fmt.Println("GoName will perform the following actions:")
 	fmt.Println()
 
-	for _, operation := range plan.Operations {
-		switch operation.Status {
-		case plans.OperationStatusReady:
-			// Check if the current filename already matches the proposed new filename
-			currentBaseName := strings.TrimSuffix(operation.VideoFile.OriginalName, filepath.Ext(operation.VideoFile.OriginalName))
-			proposedBaseName := strings.TrimSuffix(operation.TargetName, filepath.Ext(operation.TargetName))
-
-			if currentBaseName == proposedBaseName {
-				// File is already correctly named
-				alreadyCorrectCount++
-				Green.Printf("%s\n", operation.VideoFile.OriginalName)
-			} else {
-				// File needs to be renamed
+	for _, change := range plan.Changes {
+		switch change.Action {
+		case plans.ActionRename:
+			if change.IsConflicting() {
+				// Conflicted change
 				needsRenameCount++
-				fmt.Printf("%s → %s\n", operation.VideoFile.OriginalName, Yellow.Sprint(operation.TargetName))
+				fmt.Printf("%c %s → %s %s\n", change.Action, change.Before.FileName, Yellow.Sprint(change.After.FileName), Red.Sprint("(CONFLICT)"))
+			} else if change.Error != "" {
+				// Error in change
+				errorCount++
+				Red.Printf("%c", change.Action)
+				fmt.Printf(" %s: %s (%s)\n", change.Before.FileName, Red.Sprint("ERROR"), change.Error)
+			} else {
+				// Ready to be renamed
+				needsRenameCount++
+				Yellow.Printf("%c", change.Action)
+				fmt.Printf(" %s → %s\n", change.Before.FileName, Yellow.Sprint(change.After.FileName))
 			}
 
-		case plans.OperationStatusSkipped:
+		case plans.ActionNoop:
+			// File is already correctly named
+			alreadyCorrectCount++
+			Green.Printf("%c", change.Action)
+			fmt.Printf("%s\n", Green.Sprint(change.Before.FileName))
+
+		case plans.ActionSkip:
 			skippedCount++
-			fmt.Printf("%s: %s\n", operation.VideoFile.OriginalName, Blue.Sprint("SKIPPED"))
-			if operation.Error != "" {
-				fmt.Printf("    Reason: %s\n", operation.Error)
-			}
-
-		case plans.OperationStatusError:
-			errorCount++
-			fmt.Printf("%s: %v\n", operation.VideoFile.OriginalName, Red.Sprint(operation.Error))
-
-		case plans.OperationStatusConflicted:
-			// This should not happen after conflict resolution
-			errorCount++
-			fmt.Printf("%s: %s\n", operation.VideoFile.OriginalName, Red.Sprint("UNRESOLVED CONFLICT"))
+			Blue.Printf("%c", change.Action)
+			fmt.Printf(" %s: %s\n", change.Before.FileName, Blue.Sprint("skipped"))
 		}
 	}
 
@@ -85,7 +80,7 @@ func printPlanSummary(plan *plans.Plan, alreadyCorrectCount, needsRenameCount, e
 	} else {
 		fmt.Print("0 errors")
 	}
-	fmt.Printf(", %d total\n", len(plan.Operations))
+	fmt.Printf(", %d total\n", len(plan.Changes))
 
 	if len(plan.Conflicts) > 0 {
 		fmt.Printf("Conflicts: %d total, %d resolved\n", len(plan.Conflicts), plan.Summary().ResolvedConflicts)
